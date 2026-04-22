@@ -1,0 +1,52 @@
+# Base config: FSDP2 + sglang, 4-node x 8-GPU H200
+# Source this via Hydra or parse in shell scripts
+
+# --- Cluster ---
+trainer:
+  nnodes: 4
+  n_gpus_per_node: 8
+  use_legacy_worker_impl: disable
+  critic_warmup: 0
+  save_freq: 20
+  test_freq: 5
+
+# --- Actor / FSDP ---
+actor_rollout_ref:
+  actor:
+    strategy: fsdp2
+    fsdp_config:
+      model_dtype: bf16
+      param_offload: false
+      optimizer_offload: false
+    use_dynamic_bsz: true
+    use_kl_loss: true
+    kl_loss_coef: 0.001
+    kl_loss_type: low_var_kl
+    entropy_coeff: 0
+
+  # --- Rollout / sglang ---
+  rollout:
+    name: sglang
+    tensor_model_parallel_size: 4
+    gpu_memory_utilization: 0.6
+    n: 8
+    log_prob_use_dynamic_bsz: true
+    load_format: safetensors
+
+  # --- Ref ---
+  ref:
+    fsdp_config:
+      param_offload: true
+      model_dtype: bf16
+    strategy: fsdp2
+    log_prob_use_dynamic_bsz: true
+
+# --- Algorithm ---
+algorithm:
+  adv_estimator: grpo
+  use_kl_in_reward: false
+
+# --- Model defaults ---
+model:
+  use_remove_padding: true
+  enable_gradient_checkpointing: true

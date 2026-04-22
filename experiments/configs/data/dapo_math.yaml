@@ -1,0 +1,8 @@
+# DAPO-Math-17k dataset config
+train_files: /mnt/llm-train-5p/shenzhennan/datasets/DAPO-Math-17k-Processed/all/train-00000-of-00001.parquet
+val_files: /mnt/llm-train-5p/shenzhennan/datasets/DAPO-Math-17k-Processed/all/train-00000-of-00001.parquet
+max_prompt_length: 1024
+max_response_length: 16384
+filter_overlong_prompts: true
+truncation: error
+shuffle: false
