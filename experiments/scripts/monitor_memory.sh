@@ -5,8 +5,8 @@
 # Log is saved to experiments/results/memory_monitor_<timestamp>.log
 
 INTERVAL=${1:-10}
-NAMESPACE=${2:-"explore-train"}
-PREFIX=${3:-"hrd-3"}
+NAMESPACE="explore-train"
+PREFIX=${2:-"hrd-3"}
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR="${SCRIPT_DIR}/../results"
