@@ -247,6 +247,9 @@ def compute_score(
 ) -> float:
     """Compute the reward score for a solution.
 
+    Extracts the answer portion after </think>, then looks for \\boxed{}.
+    Single extraction strategy — no fallback chain.
+
     Args:
         solution_str: The solution string
         ground_truth: The ground truth answer
@@ -254,19 +257,30 @@ def compute_score(
         pause_tokens_index: Indices of pause tokens
 
     Returns:
-        Reward score (1.0 for correct, -1.0 for incorrect)
+        Dict with score, acc, and pred
     """
-    # Limit solution length for efficiency
-    solution_str = solution_str[-300:]  # The longest answer in MATH-500 has 159 characters
+    if strict_box_verify:
+        correct, pred = is_correct_strict_box(solution_str, ground_truth, pause_tokens_index)
+        reward = 1.0 if correct == 1 else -1.0
+        return {"score": reward, "acc": correct == 1, "pred": pred}
 
-    # Verify the solution
-    correct, pred = verify(solution_str, ground_truth, strict_box_verify, pause_tokens_index)
+    # Split on </think> to get the answer portion
+    if "</think>" in solution_str:
+        answer_part = solution_str.split("</think>")[-1]
+    else:
+        answer_part = solution_str
 
-    reward = 1.0 if correct else -1.0
-    acc = correct
+    # Extract from \boxed{}
+    boxed_str = last_boxed_only_string(answer_part)
+    if boxed_str is None:
+        return {"score": 0.0, "acc": False, "pred": "[NO_BOXED]"}
 
-    return {
-        "score": reward,
-        "acc": acc,
-        "pred": pred,
-    }
+    pred = remove_boxed(boxed_str)
+    if pred is None:
+        return {"score": 0.0, "acc": False, "pred": "[PARSE_ERR]"}
+
+    gt_norm = normalize_final_answer(ground_truth)
+    pred_norm = normalize_final_answer(pred)
+    correct = pred_norm == gt_norm
+
+    return {"score": 1.0 if correct else 0.0, "acc": correct, "pred": pred}
