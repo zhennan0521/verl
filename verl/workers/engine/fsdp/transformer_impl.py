@@ -317,6 +317,7 @@ class FSDPEngine(BaseEngine):
                 "target_parameters": convert_to_regular_types(self.model_config.target_parameters),
                 "exclude_modules": convert_to_regular_types(self.model_config.exclude_modules),
                 "bias": "none",
+                "use_dora": self.model_config.use_dora,
             }
             module = get_peft_model(module, LoraConfig(**lora_config))
 
@@ -522,6 +523,12 @@ class FSDPEngine(BaseEngine):
         # Apply LoRA adapters if low-rank adaptation is enabled
         if self._is_lora:
             module = self._build_lora_module(module)
+            # DoRA magnitude vectors may be initialized in float32 due to
+            # norm computation; ensure all parameters share the same dtype
+            # before FSDP wrapping to avoid mixed-dtype errors in
+            # clip_grad_norm_ and optimizer.step().
+            if self.model_config.use_dora:
+                module = module.to(torch.bfloat16)
 
         # Apply QAT before FSDP wrapping (training only)
         if self._qat_enabled and not self.engine_config.forward_only:
