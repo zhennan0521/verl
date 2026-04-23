@@ -9,7 +9,7 @@ export HYDRA_FULL_ERROR=1
 # export RAY_memory_monitor_refresh_ms=0
 
 project_name='lora_rlvr'
-exp_name="dapo-distilled-qwen-1.5b-sft-dolci-lora-r32_$(date +%m%d_%H%M)"
+exp_name="dapo-distilled-qwen-1.5b-sft-dolci-lora-r32-lr1e-6_$(date +%m%d_%H%M)"
 
 adv_estimator=grpo
 
@@ -33,9 +33,9 @@ enable_filter_groups=True
 filter_groups_metric=acc
 max_num_gen_batches=5
 train_prompt_bsz=64
-gen_prompt_bsz=$((train_prompt_bsz * 2))
+gen_prompt_bsz=$((train_prompt_bsz * 3))
 n_resp_per_prompt=8
-train_prompt_mini_bsz=16
+train_prompt_mini_bsz=64
 
 # Cluster
 NNODES=${NNODES:-4}
@@ -112,7 +112,7 @@ python3 -m recipe.dapo.main_dapo \
     actor_rollout_ref.model.lora_rank=32 \
     actor_rollout_ref.model.lora_alpha=64 \
     actor_rollout_ref.model.lora.merge=True \
-    actor_rollout_ref.actor.optim.lr=1e-5 \
+    actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.actor.optim.lr_warmup_steps=10 \
     actor_rollout_ref.actor.optim.weight_decay=0.1 \
     actor_rollout_ref.actor.ppo_mini_batch_size=${train_prompt_mini_bsz} \

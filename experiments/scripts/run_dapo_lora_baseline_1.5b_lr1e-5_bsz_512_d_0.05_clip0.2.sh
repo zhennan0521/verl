@@ -9,7 +9,7 @@ export HYDRA_FULL_ERROR=1
 # export RAY_memory_monitor_refresh_ms=0
 
 project_name='lora_rlvr'
-exp_name="dapo-distilled-qwen-1.5b-sft-dolci-lora-r32_$(date +%m%d_%H%M)"
+exp_name="dapo-distilled-qwen-1.5b-sft-dolci-lora-r32-lr1e-5-d0.05-bsz512-clip0.2_$(date +%m%d_%H%M)"
 
 adv_estimator=grpo
 
@@ -19,10 +19,10 @@ use_kl_loss=False
 kl_loss_coef=0.0
 
 clip_ratio_low=0.2
-clip_ratio_high=0.28
+clip_ratio_high=0.2
 
 max_prompt_length=$((1024 * 2))
-max_response_length=$((1024 * 28))
+max_response_length=$((1024 * 16))
 enable_overlong_buffer=False
 overlong_buffer_len=$((1024 * 4))
 overlong_penalty_factor=1.0
@@ -33,9 +33,9 @@ enable_filter_groups=True
 filter_groups_metric=acc
 max_num_gen_batches=5
 train_prompt_bsz=64
-gen_prompt_bsz=$((train_prompt_bsz * 2))
+gen_prompt_bsz=$((train_prompt_bsz * 3))
 n_resp_per_prompt=8
-train_prompt_mini_bsz=16
+train_prompt_mini_bsz=64
 
 # Cluster
 NNODES=${NNODES:-4}
@@ -111,6 +111,7 @@ python3 -m recipe.dapo.main_dapo \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
     actor_rollout_ref.model.lora_rank=32 \
     actor_rollout_ref.model.lora_alpha=64 \
+    actor_rollout_ref.model.lora_dropout=0.05 \
     actor_rollout_ref.model.lora.merge=True \
     actor_rollout_ref.actor.optim.lr=1e-5 \
     actor_rollout_ref.actor.optim.lr_warmup_steps=10 \
