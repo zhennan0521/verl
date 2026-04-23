@@ -218,3 +218,72 @@ $$W' = m \cdot \frac{W_0 + \alpha BA}{\|W_0 + \alpha BA\|_c}$$
 **注意**：`module.to(bf16)` 会把 magnitude vector 的精度从 fp32 降到 bf16。理论上 bf16 有效精度约 7 位，对于 norm 值通常足够，但如果发现训练不稳定可考虑用 fp32 magnitude + 手动梯度 cast 的方案。
 
 **影响范围**：所有 DoRA + FSDP mixed precision 的组合。
+
+---
+
+## 10. DoRA 训练 policy collapse（eval 不涨分，entropy/KL 爆炸）
+
+**现象**：LoRA 和 Full 正常涨分，DoRA 出现 policy collapse：
+- entropy: 0.5 → 4+（爆炸式增长）
+- grad_norm: 0.1 → 2.5
+- KL divergence 在 step ~50 后发散
+- 不是"eval 不涨"，而是主动 diverge
+
+### 分析方向
+
+#### 方向 A：Magnitude 更新动态放大 RL 噪声梯度（主要嫌疑）
+
+DoRA 前向中 `mag_norm_scale = m / ‖W₀ + αBA‖_c` 是 per-dimension 缩放因子。RL 的高方差梯度经过 magnitude 放大后可能形成正反馈环：
+
+```
+梯度噪声大 → magnitude 偏移 → 输出分布偏移 → 更大的梯度噪声 → 崩塌
+```
+
+与观测到的二阶段崩塌模式吻合（前 50 步稳定，之后突然发散）。
+
+**验证实验**：冻结 magnitude vector，对比是否退化为 LoRA 行为且不再崩塌：
+```python
+# transformer_impl.py: _build_model_optimizer()
+if self.model_config.use_dora:
+    module = module.to(torch.bfloat16)
+    for name, p in module.named_parameters():
+        if "lora_magnitude_vector" in name:
+            p.requires_grad = False
+```
+
+如果冻结后训练正常 → 确认 magnitude 动态更新是问题根源。
+
+#### 方向 B：Optimizer 未区分 param group（weight_decay + lr）
+
+verl 的 `build_optimizer(module.parameters())` 对所有参数统一使用 `weight_decay=0.1`，包括 magnitude vector。
+
+定量分析：lr=1e-5 × wd=0.1 = 每步衰减 0.0001%，1000 步后仅 ~0.1%，**单独看不足以解释崩塌**。但如果与方向 A 叠加（magnitude 本身不稳定 + decay 持续拉低），可能加速 collapse。
+
+**验证实验**：为 magnitude 设独立 param group：
+```python
+magnitude_params = [p for n, p in module.named_parameters() if "lora_magnitude_vector" in n]
+lora_params = [p for n, p in module.named_parameters() if "lora_" in n and "magnitude" not in n]
+param_groups = [
+    {"params": lora_params, "lr": 1e-5, "weight_decay": 0.1},
+    {"params": magnitude_params, "lr": 1e-6, "weight_decay": 0.0},
+]
+```
+
+#### 方向 C：对比 PeRL（TRL）实现差异
+
+PeRL 使用 TRL 的 `GRPOTrainer`，底层走 HuggingFace `Trainer.create_optimizer`，其中有 `get_decay_parameter_names` 逻辑会自动区分 param group，将 bias、LayerNorm 等排除出 weight_decay。
+
+待确认：TRL 的 `get_decay_parameter_names` 是否也排除了 `lora_magnitude_vector`。如果是，则说明 PeRL 天然规避了方向 B 的问题。
+
+### 已排除假设
+
+| 假设 | 排除原因 |
+|------|----------|
+| FSDP all-gather 导致 base_layer.weight 不可用 | FSDP v1 嵌套 wrap，parent flat_param 在子模块 forward 期间保持 all-gathered |
+| bf16 精度丢失 | `module.to(bf16)` 初始化误差 ~0.4%，不足以引发 entropy 爆炸 |
+
+### 实验优先级
+
+1. **实验 A**（冻结 magnitude）— 1 行代码，最小改动，直接确认/排除主因 ← **进行中**
+2. **实验 B**（独立 param group）— 如果 A 确认问题，调参找合理 lr
+3. **实验 C**（对比 TRL）— 参考实现，理解为什么 PeRL 没这个问题

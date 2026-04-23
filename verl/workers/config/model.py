@@ -125,6 +125,8 @@ class HFModelConfig(BaseConfig):
     lora_rank: int = 0
     lora_alpha: int = 16
     use_dora: bool = False
+    init_lora_weights: str = "true"  # "true"(default), "pissa", "pissa_niter_4", "milora"
+    lora_dropout: float = 0.05
     target_modules: Optional[Any] = "all-linear"  # allow both "all-linear" and ["q_proj","k_proj"]
     target_parameters: Optional[list[str]] = None  # for lora adapter on nn.Parameter
 

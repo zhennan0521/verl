@@ -45,6 +45,15 @@ lora_rank: 0
 # LoRA scaling factor
 lora_alpha: 16
 
+# Whether to use DoRA (Weight-Decomposed Low-Rank Adaptation)
+use_dora: False
+
+# LoRA weight initialization method: "true"(default), "pissa", "pissa_niter_4", "milora"
+init_lora_weights: "true"
+
+# LoRA dropout rate
+lora_dropout: 0.05
+
 # Target modules for LoRA adaptation
 target_modules: all-linear
 
